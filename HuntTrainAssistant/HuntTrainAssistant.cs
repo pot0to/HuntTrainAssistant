@@ -9,6 +9,7 @@ using ECommons.SimpleGui;
 using ECommons.Singletons;
 using ECommons.Throttlers;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using HuntTrainAssistant.DataStructures;
 using HuntTrainAssistant.PluginUI;
 using HuntTrainAssistant.Services;
@@ -25,6 +26,7 @@ public unsafe class HuntTrainAssistant : IDalamudPlugin
     internal bool IsMoving = false;
     internal Vector3 LastPosition = Vector3.Zero;
     public TaskManager TaskManager;
+    public NavmeshIPC Navmesh;
     public int LastInstance = 0;
     public HashSet<DawntrailARank> KilledARanks = [];
 
@@ -39,6 +41,7 @@ public unsafe class HuntTrainAssistant : IDalamudPlugin
         EzCmd.Add("/hta", OnChatCommand, "toggle plugin interface\n/hta clear: clear current conductors\n/hta <player name>: add new conductor");
         Svc.Chat.ChatMessage += ChatMessageHandler.Chat_ChatMessage;
         Svc.Framework.Update += Framework_Update;
+        Svc.Framework.Update += OnUpdate;
         Svc.ClientState.TerritoryChanged += ClientState_TerritoryChanged;
         SingletonServiceManager.Initialize(typeof(ServiceManager));
 				EzIPC.OnSafeInvocationException += EzIPC_OnSafeInvocationException;
@@ -65,6 +68,33 @@ public unsafe class HuntTrainAssistant : IDalamudPlugin
         }
         KilledARanks.Clear();
         PluginLog.Debug($"Cleared killed A ranks list (cs_tt)");
+    }
+
+    private void OnUpdate(object framework)
+    {
+        Svc.Log.Info("OnUpdate called");
+        if (TaskManager.IsBusy) return;
+
+        if (AgentMap.Instance()->IsFlagMarkerSet == 0) return;
+
+        Svc.Log.Info("OnUpdate flag is set");
+
+        var flag = AgentMap.Instance()->FlagMapMarker;
+
+        Svc.Log.Info("OnUpdate got flag marker");
+
+        if (!Navmesh.IsRunning() && !Navmesh.PathfindInProgress())
+        {
+            Svc.Log.Info("OnUpdate Navmesh not running");
+            if (AgentMap.Instance()->IsFlagMarkerSet != 0)
+            {
+                Navmesh.PathfindAndMoveTo(Utils.ConvertMapMarkerToRawPosition(flag), true);
+            }
+        }
+        else
+        {
+            Svc.Log.Info("OnUpdate Navmesh is running");
+        }
     }
 
     private void Framework_Update(object framework)
